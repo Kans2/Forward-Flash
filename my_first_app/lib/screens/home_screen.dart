@@ -75,8 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               content: Text(
-                'Dialer has been launched to forward calls to ${p.forwardNumber}. '
-                'Please verify the success message from your carrier on the screen.',
+                result.errorMessage ?? 'Successfully established forwarding to ${p.forwardNumber}.',
               ),
               actions: [
                 FilledButton(

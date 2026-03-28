@@ -45,23 +45,53 @@ class MainActivity : FlutterActivity() {
     // ── Dial USSD ─────────────────────────────────────────────────────────────
     private fun dialUssd(ussd: String, simSlot: Int, result: MethodChannel.Result) {
         Log.d("CallForward", "dialUssd called: ussd=$ussd simSlot=$simSlot")
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val subId = getSubscriptionId(simSlot)
+                var tm = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+                if (subId != null) {
+                    tm = tm.createForSubscriptionId(subId)
+                }
+
+                Log.d("CallForward", "Sending USSD Request silently: $ussd")
+                tm.sendUssdRequest(ussd, object : TelephonyManager.UssdResponseCallback() {
+                    override fun onReceiveUssdResponse(telephonyManager: TelephonyManager?, request: String?, returnMessage: CharSequence?) {
+                        Log.d("CallForward", "USSD Success: $returnMessage")
+                        val resultMap = mapOf("success" to true, "message" to (returnMessage?.toString() ?: "Forwarding enabled"))
+                        result.success(resultMap)
+                    }
+
+                    override fun onReceiveUssdResponseFailed(telephonyManager: TelephonyManager?, request: String?, failureCode: Int) {
+                        Log.e("CallForward", "USSD Failed with code: $failureCode")
+                        // If silent execution fails natively, we try throwing it straight to the fallback intent.
+                        fallbackToDialer(ussd, simSlot, result)
+                    }
+                }, Handler(Looper.getMainLooper()))
+            } catch (e: SecurityException) {
+                Log.e("CallForward", "SecurityException during silent USSD: ${e.message}")
+                fallbackToDialer(ussd, simSlot, result)
+            } catch (e: Exception) {
+                Log.e("CallForward", "Exception during silent USSD: ${e.message}")
+                fallbackToDialer(ussd, simSlot, result)
+            }
+        } else {
+            fallbackToDialer(ussd, simSlot, result)
+        }
+    }
+
+    private fun fallbackToDialer(ussd: String, simSlot: Int, result: MethodChannel.Result) {
         try {
-            // ACTION_CALL executes the USSD string immediately without requiring the user to press the call button.
-            // This requires the CALL_PHONE permission which is already requested by the flutter permission handler.
             val intent = Intent(Intent.ACTION_CALL).apply {
-                // Replace '#' with literal "%23" so that Uri.parse() does NOT
-                // double-encode it (Uri.encode("#") returns "%23", but Uri.parse
-                // then encodes the '%' to '%25', producing "%2523" which breaks USSD).
                 val encoded = ussd.replace("#", "%23")
                 data = Uri.parse("tel:$encoded")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                // Dual-SIM slot hint (honoured by some OEM dialers)
                 putExtra("com.android.phone.extra.slot", simSlot)
                 putExtra("simSlot", simSlot)
             }
             Log.d("CallForward", "Starting dialer intent: ${intent.data}")
             startActivity(intent)
-            result.success(true)
+            result.success(mapOf("success" to true, "message" to "Device initiated dialing sequence."))
         } catch (e: Exception) {
             Log.e("CallForward", "dialUssd error: ${e.message}")
             result.error("DIAL_ERROR", e.message, null)

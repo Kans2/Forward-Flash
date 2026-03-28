@@ -99,13 +99,21 @@ class CallForwardingService {
     try {
       // Try native platform channel first (supports SIM slot selection)
       debugPrint('[CallForward] Invoking native dialUssd channel');
-      final ok = await _channel.invokeMethod<bool>('dialUssd', {
+      final rawResult = await _channel.invokeMethod('dialUssd', {
         'ussd':    ussd,
         'simSlot': simSlot,
         'silent':  silent,
       });
-      debugPrint('[CallForward] Native channel returned: $ok');
-      return (success: ok ?? false, errorMessage: null);
+      debugPrint('[CallForward] Native channel returned: $rawResult');
+      
+      if (rawResult is Map) {
+        final success = rawResult['success'] == true;
+        final message = rawResult['message'] as String?;
+        return (success: success, errorMessage: message);
+      }
+
+      final ok = rawResult == true;
+      return (success: ok, errorMessage: null);
     } on PlatformException catch (e) {
       debugPrint('[CallForward] PlatformException: ${e.message}, trying fallback');
       // Fallback: open dialer directly via tel: URI
