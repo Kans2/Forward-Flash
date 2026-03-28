@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:animate_do/animate_do.dart';
 
 import '../models/preset.dart';
@@ -28,23 +27,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _loadPresets() {
-    setState(() => _presets = PresetRepository.instance.all());
+    setState(() => _presets = PresetRepository.instance.all().where((p) => p.id != 'adhoc').toList());
   }
 
   Future<void> _activatePreset(Preset p) async {
-    debugPrint('[CallForward] _activatePreset tapped: name=${p.name} number="${p.forwardNumber}" simSlot=${p.simSlot}');
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('DEBUG: Tapped Preset "${p.name}"'),
-        duration: const Duration(seconds: 1),
-      ));
-    }
-
     // If the number is empty or too short (e.g. they entered a space or 1 digit),
     // force them to the editor to set it up properly.
     if (p.forwardNumber.trim().length < 3) {
-      debugPrint('[CallForward] forwardNumber is invalid → opening editor');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -59,56 +48,63 @@ class _HomeScreenState extends State<HomeScreen> {
         context,
         MaterialPageRoute(builder: (_) => PresetEditorScreen(preset: p)),
       );
-      debugPrint('[CallForward] Editor returned: $result');
       if (result == true) _loadPresets();
       return;
     }
 
-    debugPrint('[CallForward] forwardNumber="${p.forwardNumber}" → calling enable()');
     setState(() => _loading = true);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('DEBUG: Calling Service.enable() with SIM ${p.simSlot}'),
-        duration: const Duration(seconds: 1),
-      ));
-    }
 
     try {
       final result = await CallForwardingService.instance.enable(p);
-      debugPrint('[CallForward] enable() returned: success=${result.success} error=${result.errorMessage}');
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('DEBUG: Service.enable() returned $result'),
-          duration: const Duration(seconds: 2),
-        ));
-      }
+        setState(() {
+          _loading = false;
+          _loadPresets();
+        });
 
-      setState(() {
-        _loading = false;
-        _loadPresets();
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.success
-                ? '✓ Forwarding to ${p.forwardNumber} enabled'
-                : 'Failed: ${result.errorMessage}'),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
+        if (result.success) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Row(
+                children: const [
+                  Icon(Icons.check_circle, color: Colors.green),
+                  SizedBox(width: 8),
+                  Text('Call Forwarding'),
+                ],
+              ),
+              content: Text(
+                'Dialer has been launched to forward calls to ${p.forwardNumber}. '
+                'Please verify the success message from your carrier on the screen.',
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Got it'),
+                ),
+              ],
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed: ${result.errorMessage}'),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Theme.of(context).colorScheme.error,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+        }
       }
     } catch (e) {
-      debugPrint('[CallForward] enable() threw exception: $e');
-      setState(() => _loading = false);
       if (mounted) {
+        setState(() => _loading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('DEBUG Exception: $e'),
+            content: Text('Error: $e'),
             behavior: SnackBarBehavior.floating,
+            backgroundColor: Theme.of(context).colorScheme.error,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
@@ -175,6 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
         forwardNumber: numberCtrl.text.trim(),
         forwardTypeIndex: 0, // 0 = allCalls
       );
+      await PresetRepository.instance.save(p);
       _activatePreset(p);
     }
   }
