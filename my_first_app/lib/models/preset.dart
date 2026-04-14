@@ -1,4 +1,6 @@
 import 'package:hive/hive.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/ussd_database.dart';
 
 part 'preset.g.dart';
@@ -106,5 +108,26 @@ class PresetRepository {
       await p.save();
     }
     await _meta.put(_activeKey, id);
+
+    // Sync to native SharedPreferences for the Android Quick Settings Tile
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (id != null) {
+        final p = _box.get(id);
+        await prefs.setBool('is_forwarding_active', true);
+        await prefs.setString('active_preset_name', p?.name ?? 'Active');
+      } else {
+        await prefs.setBool('is_forwarding_active', false);
+        await prefs.remove('active_preset_name');
+      }
+      
+      // Notify Android to refresh Home Screen Widgets
+      try {
+        const platform = MethodChannel('com.callforward/system');
+        await platform.invokeMethod('updateWidget');
+      } catch (e) {
+        // Ignored if unsupported (e.g. running on iOS/Web)
+      }
+    } catch (_) {}
   }
 }

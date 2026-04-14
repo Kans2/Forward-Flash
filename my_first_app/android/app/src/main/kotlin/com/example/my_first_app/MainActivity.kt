@@ -40,6 +40,21 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        // ── System channel ───────────────────────────────────────────────────
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.callforward/system")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "updateWidget" -> {
+                        val updateIntent = Intent(this, CallForwardWidgetProvider::class.java).apply {
+                            action = "com.example.my_first_app.WIDGET_UPDATE"
+                        }
+                        sendBroadcast(updateIntent)
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     // ── Dial USSD ─────────────────────────────────────────────────────────────

@@ -19,11 +19,28 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<Preset> _presets = [];
   bool _loading = false;
+  int _globalSelectedSim = 0;
 
   @override
   void initState() {
     super.initState();
     _loadPresets();
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final sims = SimDetectionService.instance.slots;
+      if (sims.length == 1) {
+        setState(() => _globalSelectedSim = sims.first.slotIndex);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('1 SIM found: Auto-selecting ${sims.first.displayName}'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      } else if (sims.isNotEmpty) {
+        setState(() => _globalSelectedSim = sims.first.slotIndex);
+      }
+    });
   }
 
   void _loadPresets() {
@@ -31,6 +48,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _activatePreset(Preset p) async {
+    // Override SIM with the globally selected SIM from the dashboard
+    p.simSlot = _globalSelectedSim;
+
     // If the number is empty or too short (e.g. they entered a space or 1 digit),
     // force them to the editor to set it up properly.
     if (p.forwardNumber.trim().length < 3) {
@@ -169,6 +189,7 @@ class _HomeScreenState extends State<HomeScreen> {
         emoji: '📞',
         forwardNumber: numberCtrl.text.trim(),
         forwardTypeIndex: 0, // 0 = allCalls
+        simSlot: _globalSelectedSim,
       );
       await PresetRepository.instance.save(p);
       _activatePreset(p);
@@ -231,6 +252,40 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
+
+          // ── Global SIM Selector ─────────────────────────────────────────
+          if (sims.length > 1)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Select SIM Network',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: scheme.onSurfaceVariant,
+                            )),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: sims.map((s) {
+                        final isSelected = s.slotIndex == _globalSelectedSim;
+                        return ChoiceChip(
+                          label: Text('${s.slotLabel} (${s.displayName})'),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            if (selected) {
+                              setState(() => _globalSelectedSim = s.slotIndex);
+                            }
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
           // ── Section header ───────────────────────────────────────────────
           SliverToBoxAdapter(

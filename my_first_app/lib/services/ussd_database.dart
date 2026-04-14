@@ -87,14 +87,12 @@ class CarrierUssdDatabase {
 
   static String _cleanNumber(String raw, Carrier carrier) {
     String n = raw.replaceAll(RegExp(r'[\s\-\(\)\+]'), '');
-    // Strip any existing country code prefix (91) for 12-digit numbers
-    if (n.length == 12 && n.startsWith('91')) {
+    // Strip any existing country code prefix (91 or 0091) for Indian numbers
+    // to pass purely the 10-digit number to the carrier network.
+    if (n.startsWith('0091') && n.length >= 14) {
+      n = n.substring(4);
+    } else if (n.startsWith('91') && n.length >= 12) {
       n = n.substring(2);
-    }
-    // For 10-digit local numbers, use 0091 IDD prefix instead of +91
-    // because '+' can get percent-encoded by dialers and break the USSD string.
-    if (n.length == 10) {
-      n = '0091$n';
     }
     return n;
   }

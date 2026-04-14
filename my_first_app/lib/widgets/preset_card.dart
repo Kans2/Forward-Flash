@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/preset.dart';
 import '../services/ussd_database.dart';
+import '../services/sim_detection_service.dart';
 
 class PresetCard extends StatelessWidget {
   final Preset preset;
@@ -88,16 +89,39 @@ class PresetCard extends StatelessWidget {
               // ── Forward number (if set) ──────────────────────────────────
               if (preset.forwardNumber.isNotEmpty) ...[
                 const SizedBox(height: 4),
-                Text(
-                  '→ ${preset.forwardNumber}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isActive
-                        ? Colors.white.withValues(alpha: 0.75)
-                        : scheme.onSurfaceVariant,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '→ ${preset.forwardNumber}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isActive
+                              ? Colors.white.withValues(alpha: 0.75)
+                              : scheme.onSurfaceVariant,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (SimDetectionService.instance.isDualSim)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isActive ? Colors.white.withValues(alpha: 0.2) : scheme.surfaceBright,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          preset.simSlot == 0 ? 'SIM 1' : 'SIM 2',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: isActive ? Colors.white : scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ],
